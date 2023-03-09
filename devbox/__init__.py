@@ -7,8 +7,9 @@ import fcntl
 import termios
 import struct
 import logging
-from flask import Flask, render_template, session, request
+from flask import Flask, render_template, session, request, make_response
 from flask_socketio import SocketIO
+from .client_manager import ClientManager
 
 # init global variables
 this_dir = os.path.dirname(os.path.realpath(__file__))
@@ -18,10 +19,10 @@ logger = app.logger
 logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s [line:%(lineno)d] - %(levelname)s: %(message)s')
 socketio = SocketIO(app)
 sessions = {}
+client_manager = ClientManager()
 # thing below may be rubbish
 app.config["fd"] = None
 app.config["child_pid"] = None
-app.config['cmd'] = ["docker", "exec", "-it", "dev", "bash"]
 
 # utils
 def set_winsize(fd, row, col, xpixel=0, ypixel=0):
@@ -57,10 +58,39 @@ def hello_world():
 def webshell():
     return render_template("webshell.html")
 
+@app.route('/register')
+def register():
+    client_id = request.cookies.get("client_id")
+    if client_manager.check_client(client_id):
+        return "Client already registered"
+    client_id = client_manager.register()
+    resp = make_response("Client registered")
+    resp.set_cookie("client_id", client_id)
+    return resp
+
+@app.route('/list-box')
+def list_box():
+    client_id = request.cookies.get("client_id")
+    if not client_manager.check_client(client_id):
+        return "Client not registered"
+    return str(client_manager.get_box_list(client_id))
+
+@app.route('/create-box')
+def create_box():
+    client_id = request.cookies.get("client_id")
+    if not client_manager.check_client(client_id):
+        return "Client not registered"
+    if client_manager.create_box(client_id):
+        return "Box created"
+    else:
+        return "Box creation failed"
+
 
 @socketio.on("pty-input", namespace="/webshell")
 def pty_input(data):
     sid = request.sid
+    if sid not in sessions:
+        return
     logging.debug("pty_input: sid=%s" % sid)
     if sessions[sid]["fd"]:
         logging.debug("received input from browser: %s" % data["input"])
@@ -69,6 +99,8 @@ def pty_input(data):
 @socketio.on("resize", namespace="/webshell")
 def resize(data):
     sid = request.sid
+    if sid not in sessions:
+        return
     if sessions[sid]["fd"]:
         logging.debug(f"Resizing window to {data['rows']}x{data['cols']}")
         set_winsize(sessions[sid]["fd"], data["rows"], data["cols"])
@@ -77,6 +109,16 @@ def resize(data):
 def connect():
     """new client connected"""
     sid = request.sid
+    container = request.args.get("box_id")
+    if not container:
+        socketio.emit("pty-output", {"output": "no box id provided"}, namespace="/webshell", to=sid)
+        socketio.close_room(sid)
+        return
+    client_id = request.cookies.get("client_id")
+    if not client_manager.auth_box(client_id, container):
+        socketio.emit("pty-output", {"output": "authentication failed or box does not exist"}, namespace="/webshell", to=sid)
+        socketio.close_room(sid)
+        return
     logging.info("new client connected: sid=%s" % sid)
     if sid not in sessions:
         logging.info("client not connected, creating new session")
@@ -86,14 +128,15 @@ def connect():
             # this is the child process fork.
             logging.info("child process forked")
             logging.disable(logging.CRITICAL)
-            subprocess.run(app.config["cmd"])
+            subprocess.run(["docker", "exec", "-it", container, "bash"])
         else:
             # this is the parent process fork.
             sessions[sid]["fd"] = fd
             sessions[sid]["child_pid"] = child_pid
             socketio.start_background_task(target=read_and_forward_pty_output, sid=sid)
     else:
-        logging.warn("client already connected")
+        logger.error("client already connected")
+        return "client already connected"
         
 @socketio.on("disconnect", namespace="/webshell")
 def disconnect():
