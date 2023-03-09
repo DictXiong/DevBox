@@ -7,16 +7,17 @@ import fcntl
 import termios
 import struct
 import logging
-from flask import Flask, render_template
+from flask import Flask, render_template, session, request
 from flask_socketio import SocketIO
 
 # init global variables
 this_dir = os.path.dirname(os.path.realpath(__file__))
 app = Flask(__name__, template_folder=os.path.join(this_dir, "templates"))
 logger = app.logger
-logger.setLevel(logging.DEBUG)
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s [line:%(lineno)d] - %(levelname)s: %(message)s')
+# logger.setLevel(logging.)
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s [line:%(lineno)d] - %(levelname)s: %(message)s')
 socketio = SocketIO(app)
+sessions = {}
 # thing below may be rubbish
 app.config["fd"] = None
 app.config["child_pid"] = None
@@ -29,21 +30,23 @@ def set_winsize(fd, row, col, xpixel=0, ypixel=0):
     winsize = struct.pack("HHHH", row, col, xpixel, ypixel)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
 
-def read_and_forward_pty_output():
+def read_and_forward_pty_output(sid):
     max_read_bytes = 1024 * 20
+    logging.debug("read_and_forward_pty_output: sid=%s" % sid)
     while True:
         socketio.sleep(0.05)
-        if app.config['fd']:
-            (data_ready, _, _) = select.select([app.config["fd"]], [], [], None)
+        if sessions[sid]['fd']:
+            logging.debug("reading from pty")
+            (data_ready, _, _) = select.select([sessions[sid]["fd"]], [], [], None)
             if data_ready:
                 try:
-                    output = os.read(app.config["fd"], max_read_bytes).decode(
+                    output = os.read(sessions[sid]["fd"], max_read_bytes).decode(
                         errors="ignore"
                     )
                 except OSError:
-                    socketio.emit("pty-output", {"output": "Connection closed"}, namespace="/webshell")
+                    socketio.emit("pty-output", {"output": "Connection closed"}, namespace="/webshell", to=sid)
                     return
-                socketio.emit("pty-output", {"output": output}, namespace="/webshell")
+                socketio.emit("pty-output", {"output": output}, namespace="/webshell", to=sid)
 
 
 @app.route('/')
@@ -57,49 +60,50 @@ def webshell():
 
 @socketio.on("pty-input", namespace="/webshell")
 def pty_input(data):
-    """write to the child pty. The pty sees this as if you are typing in a real
-    terminal.
-    """
-    if app.config["fd"]:
+    sid = request.sid
+    logging.debug("pty_input: sid=%s" % sid)
+    if sessions[sid]["fd"]:
         logging.debug("received input from browser: %s" % data["input"])
-        os.write(app.config["fd"], data["input"].encode())
+        os.write(sessions[sid]["fd"], data["input"].encode())
 
 @socketio.on("resize", namespace="/webshell")
 def resize(data):
-    if app.config["fd"]:
+    sid = request.sid
+    if sessions[sid]["fd"]:
         logging.debug(f"Resizing window to {data['rows']}x{data['cols']}")
-        set_winsize(app.config["fd"], data["rows"], data["cols"])
+        set_winsize(sessions[sid]["fd"], data["rows"], data["cols"])
 
 @socketio.on("connect", namespace="/webshell")
 def connect():
     """new client connected"""
-    logging.info("new client connected")
-    if app.config["child_pid"]:
-        # already started child process, don't start another
-        return
-
-    # create child process attached to a pty we can read from and write to
-    (child_pid, fd) = pty.fork()
-    if child_pid == 0:
-        logging.disable(logging.CRITICAL)
-        # this is the child process fork.
-        # anything printed here will show up in the pty, including the output
-        # of this subprocess
-        subprocess.run(app.config["cmd"])
+    sid = request.sid
+    logging.info("new client connected: sid=%s" % sid)
+    if sid not in sessions:
+        logging.info("client not connected, creating new session")
+        sessions[sid] = {}
+        (child_pid, fd) = pty.fork()
+        if child_pid == 0:
+            # this is the child process fork.
+            logging.info("child process forked")
+            logging.disable(logging.CRITICAL)
+            subprocess.run(app.config["cmd"])
+        else:
+            # this is the parent process fork.
+            sessions[sid]["fd"] = fd
+            sessions[sid]["child_pid"] = child_pid
+            socketio.start_background_task(target=read_and_forward_pty_output, sid=sid)
     else:
-        # this is the parent process fork.
-        # store child fd and pid
-        app.config["fd"] = fd
-        app.config["child_pid"] = child_pid
-        set_winsize(fd, 50, 50)
-        cmd = app.config["cmd"]
-        # logging/print statements must go after this because... I have no idea why
-        # but if they come before the background task never starts
-        socketio.start_background_task(target=read_and_forward_pty_output)
-
-        logging.info("child pid is " + child_pid)
-        logging.info(
-            f"starting background task with command `{cmd}` to continously read "
-            "and forward pty output to client"
-        )
-        logging.info("task started")
+        logging.warn("client already connected")
+        
+@socketio.on("disconnect", namespace="/webshell")
+def disconnect():
+    """client disconnected"""
+    sid = request.sid
+    logging.info("client disconnected: sid=%s" % sid)
+    if sid in sessions:
+        logging.info("client connected, closing session")
+        os.close(sessions[sid]["fd"])
+        os.kill(sessions[sid]["child_pid"], 9)
+        del sessions[sid]
+    else:
+        logging.warn("client not connected")
