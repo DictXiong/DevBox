@@ -16,13 +16,11 @@ this_dir = os.path.dirname(os.path.realpath(__file__))
 app = Flask(__name__, template_folder=os.path.join(this_dir, "templates"))
 logger = app.logger
 # logger.setLevel(logging.)
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s [line:%(lineno)d] - %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s')
 socketio = SocketIO(app)
 sessions = {}
 client = ClientManager()
 # thing below may be rubbish
-app.config["fd"] = None
-app.config["child_pid"] = None
 
 # utils
 def set_winsize(fd, row, col, xpixel=0, ypixel=0):
@@ -61,7 +59,7 @@ def webshell():
 @app.route('/register')
 def register():
     client_id = request.cookies.get("client_id")
-    if client.check_client(client_id):
+    if client_id and client.check_client(client_id):
         return "Client already registered"
     client_id = client.register(request.remote_addr)
     resp = make_response("Client registered")
@@ -71,14 +69,14 @@ def register():
 @app.route('/list-box')
 def list_box():
     client_id = request.cookies.get("client_id")
-    if not client.check_client(client_id):
+    if not client_id or not client.check_client(client_id):
         return "Client not registered"
     return str(client.get_box_fancy_list(client_id))
 
 @app.route('/create-box')
 def create_box():
     client_id = request.cookies.get("client_id")
-    if not client.check_client(client_id):
+    if not client_id or not client.check_client(client_id):
         return "Client not registered"
     if client.create_box(client_id):
         return "Box created"
@@ -115,8 +113,8 @@ def connect():
         socketio.close_room(sid)
         return
     client_id = request.cookies.get("client_id")
-    if not client.auth_box(client_id, container):
-        socketio.emit("pty-output", {"output": "authentication failed or box does not exist"}, namespace="/webshell", to=sid)
+    if not client_id or not client.auth_box(client_id, container):
+        socketio.emit("pty-output", {"output": "authentication failed or box does not exist\n"}, namespace="/webshell", to=sid)
         socketio.close_room(sid)
         return
     logging.info("new client connected: sid=%s" % sid)
