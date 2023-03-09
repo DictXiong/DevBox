@@ -15,6 +15,7 @@ class DBManager:
     def init_db(self):
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
+        open(self.db_path, 'w').close()
         con = sqlite3.connect(self.db_path)
         cur = con.cursor()
         cur.execute("CREATE TABLE clients(id,register_time,register_ip)")
