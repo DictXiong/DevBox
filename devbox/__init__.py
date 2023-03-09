@@ -63,9 +63,9 @@ def register():
     client_id = request.cookies.get("client_id")
     if client.check_client(client_id):
         return "Client already registered"
-    client_id = client.register()
+    client_id = client.register(request.remote_addr)
     resp = make_response("Client registered")
-    resp.set_cookie("client_id", client_id)
+    resp.set_cookie("client_id", client_id, max_age = 34560000)
     return resp
 
 @app.route('/list-box')
@@ -73,7 +73,7 @@ def list_box():
     client_id = request.cookies.get("client_id")
     if not client.check_client(client_id):
         return "Client not registered"
-    return str(client.get_box_list(client_id))
+    return str(client.get_box_fancy_list(client_id))
 
 @app.route('/create-box')
 def create_box():
@@ -126,7 +126,6 @@ def connect():
         (child_pid, fd) = pty.fork()
         if child_pid == 0:
             # this is the child process fork.
-            logging.info("child process forked")
             logging.disable(logging.CRITICAL)
             subprocess.run(["docker", "exec", "-it", container, "bash"])
         else:

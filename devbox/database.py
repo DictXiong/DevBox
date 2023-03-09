@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import logging
+import time
 
 class DBManager:
     def __init__(self) -> None:
@@ -10,29 +11,31 @@ class DBManager:
             self.init_db()
         self.con = sqlite3.connect(self.db_path, check_same_thread=False)
         self.cur = self.con.cursor()
-    
+
     def init_db(self):
         if os.path.exists(self.db_path):
             os.remove(self.db_path)
         con = sqlite3.connect(self.db_path)
         cur = con.cursor()
-        cur.execute("CREATE TABLE clients(id)")
+        cur.execute("CREATE TABLE clients(id,register_time,register_ip)")
         cur.execute("CREATE TABLE boxes(id,client_id)")
         con.commit()
             
-    def add_client(self, client_id):
+    def add_client(self, client_id, client_ip):
         assert client_id
         self.cur.execute("SELECT * FROM clients WHERE id=?", (client_id,))
         if self.cur.fetchone() is not None:
             logging.error(f"Client {client_id} already exists")
             return False
-        self.cur.execute("INSERT INTO clients VALUES (?)", (client_id,))
+        self.cur.execute("INSERT INTO clients VALUES (?,?,?)", (client_id, time.time(), client_ip))
+        self.con.commit()
     
     # todo: not fully implemented
     def remove_client(self, client_id):
         assert client_id
         self.cur.execute("DELETE FROM clients WHERE id=?", (client_id,))
         self.cur.execute("DELETE FROM boxes WHERE client_id=?", (client_id,))
+        self.con.commit()
     
     def add_box(self, client_id, box_id):
         assert client_id and box_id
@@ -40,10 +43,12 @@ class DBManager:
         if self.cur.fetchone() is not None:
             return False
         self.cur.execute("INSERT INTO boxes VALUES (?,?)", (box_id, client_id))
-        
+        self.con.commit()
+
     def remove_box(self, box_id):
         assert box_id
         self.cur.execute("DELETE FROM boxes WHERE id=?", (box_id,))
+        self.con.commit()
 
     def has_client(self, client_id):
         assert client_id
