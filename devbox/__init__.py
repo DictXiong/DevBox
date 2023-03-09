@@ -9,17 +9,17 @@ import struct
 import logging
 from flask import Flask, render_template, session, request, make_response
 from flask_socketio import SocketIO
-from .client_manager import ClientManager
+from .client import ClientManager
 
 # init global variables
 this_dir = os.path.dirname(os.path.realpath(__file__))
 app = Flask(__name__, template_folder=os.path.join(this_dir, "templates"))
 logger = app.logger
 # logger.setLevel(logging.)
-logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(name)s [line:%(lineno)d] - %(levelname)s: %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s [line:%(lineno)d] - %(levelname)s: %(message)s')
 socketio = SocketIO(app)
 sessions = {}
-client_manager = ClientManager()
+client = ClientManager()
 # thing below may be rubbish
 app.config["fd"] = None
 app.config["child_pid"] = None
@@ -61,9 +61,9 @@ def webshell():
 @app.route('/register')
 def register():
     client_id = request.cookies.get("client_id")
-    if client_manager.check_client(client_id):
+    if client.check_client(client_id):
         return "Client already registered"
-    client_id = client_manager.register()
+    client_id = client.register()
     resp = make_response("Client registered")
     resp.set_cookie("client_id", client_id)
     return resp
@@ -71,16 +71,16 @@ def register():
 @app.route('/list-box')
 def list_box():
     client_id = request.cookies.get("client_id")
-    if not client_manager.check_client(client_id):
+    if not client.check_client(client_id):
         return "Client not registered"
-    return str(client_manager.get_box_list(client_id))
+    return str(client.get_box_list(client_id))
 
 @app.route('/create-box')
 def create_box():
     client_id = request.cookies.get("client_id")
-    if not client_manager.check_client(client_id):
+    if not client.check_client(client_id):
         return "Client not registered"
-    if client_manager.create_box(client_id):
+    if client.create_box(client_id):
         return "Box created"
     else:
         return "Box creation failed"
@@ -115,7 +115,7 @@ def connect():
         socketio.close_room(sid)
         return
     client_id = request.cookies.get("client_id")
-    if not client_manager.auth_box(client_id, container):
+    if not client.auth_box(client_id, container):
         socketio.emit("pty-output", {"output": "authentication failed or box does not exist"}, namespace="/webshell", to=sid)
         socketio.close_room(sid)
         return
