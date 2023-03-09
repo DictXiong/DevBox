@@ -43,6 +43,11 @@ class ClientManager:
         if not self.db_manager.has_client(client_id):
             return False
         return self.db_manager.has_box(client_id, box_id)
+    
+    def remove_box(self, client_id, box_id):
+        self.box_manager.remove_box(box_id)
+        self.db_manager.remove_box(box_id)
+        return True
 
 # todo: run this outside
 def autoclean_loop(box_manager, db_manager):

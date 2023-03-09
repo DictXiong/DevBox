@@ -7,7 +7,7 @@ import fcntl
 import termios
 import struct
 import logging
-from flask import Flask, render_template, session, request, make_response
+from flask import Flask, render_template, session, request, make_response, jsonify
 from flask_socketio import SocketIO
 from .client import ClientManager
 
@@ -42,7 +42,7 @@ def read_and_forward_pty_output(sid):
                     output = os.read(sessions[sid]["fd"], max_read_bytes).decode(
                         errors="ignore"
                     )
-                except OSError:
+                except (OSError,KeyError):
                     socketio.emit("pty-output", {"output": "Connection closed"}, namespace="/webshell", to=sid)
                     return
                 socketio.emit("pty-output", {"output": output}, namespace="/webshell", to=sid)
@@ -50,7 +50,7 @@ def read_and_forward_pty_output(sid):
 
 @app.route('/')
 def hello_world():
-    return "<h1>Welcome to Dict's DevBox</h1>\n"
+    return render_template("index.html")
 
 @app.route('/webshell')
 def webshell():
@@ -60,9 +60,9 @@ def webshell():
 def register():
     client_id = request.cookies.get("client_id")
     if client_id and client.check_client(client_id):
-        return "Client already registered"
+        return jsonify({"status": 400, "message": "client already registered"})
     client_id = client.register(request.remote_addr)
-    resp = make_response("Client registered")
+    resp = make_response(jsonify({"status": 200, "message": "client registered"}))
     resp.set_cookie("client_id", client_id, max_age = 34560000)
     return resp
 
@@ -70,18 +70,34 @@ def register():
 def list_box():
     client_id = request.cookies.get("client_id")
     if not client_id or not client.check_client(client_id):
-        return "Client not registered"
-    return str(client.get_box_fancy_list(client_id))
+        return jsonify({"status": 403})
+    return jsonify(client.get_box_fancy_list(client_id))
 
 @app.route('/create-box')
 def create_box():
     client_id = request.cookies.get("client_id")
     if not client_id or not client.check_client(client_id):
-        return "Client not registered"
+        return jsonify({"status": 403, "message": "client not registered"})
     if client.create_box(client_id):
-        return "Box created"
+        return jsonify({"status": 200, "message": "box created"})
     else:
-        return "Box creation failed"
+        return jsonify({"status": 400, "message": "box creation failed. check if you exceeded the limit"})
+
+@app.route('/remove-box')
+def remove_box():
+    client_id = request.cookies.get("client_id")
+    box_id = request.args.get("box_id")
+    if not client_id or not client.check_client(client_id):
+        return jsonify({"status": 403, "message": "client not registered"})
+    if not box_id:
+        return jsonify({"status": 400, "message": "box id not provided"})
+    if client.auth_box(client_id, box_id):
+        if client.remove_box(client_id, box_id):
+            return jsonify({"status": 200, "message": "box removed"})
+        else:
+            return jsonify({"status": 500, "message": "box removal failed"})
+    else:
+        return jsonify({"status": 403, "message": "this box does not belong to you"})
 
 
 @socketio.on("pty-input", namespace="/webshell")

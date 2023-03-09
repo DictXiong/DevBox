@@ -1,0 +1,109 @@
+<script src="https://cdn.staticfile.org/jquery/3.3.1/jquery.min.js"></script>
+<title>Dict's DevBox</title>
+<style>
+    tbody {
+      font-family: "Courier New", Courier, monospace;
+    }
+    table, th, td {
+      border: 1px solid black;
+    }
+</style>
+
+<h1>Dict's DevBox</h1>
+<div id="box-list" hidden>
+    <p><button id="create-box">Apply new DevBox</button> <i id="apply-status"></i></p>
+    <table>
+        <caption>Available DevBox List</caption>
+        <thead>
+            <tr>
+                <th>DevBox ID</th>
+                <th>Create Time</th>
+                <th>Time to Live</th>
+                <th>Operations</th>
+            </tr>
+        </thead>
+        <tbody>
+
+        </tbody>
+    </table>
+</div>
+<div id="register-required" hidden>
+    <b>Please <a href="#" onclick="javascript:register();">register</a> first</b>
+    <p id="register-resp"></p>
+</div>
+<div id="loading">Loading...</div>
+<div id="op-resp"></div>
+
+<script>
+function list_box(){
+    $.getJSON('list-box', function(data) {
+        console.log(data)
+        if (data.constructor == Object) {
+            $('#loading').hide();
+            $('#register-required').show();
+        } else {
+            $('#loading').hide();
+            $('#box-list').show();
+            $('#box-list tbody').empty();
+            for (item of data) {
+                console.log(item)
+                box_id = '<a href="webshell?box_id=' + item['id'] + '" target="_blank">' + item['id'].slice(0,12) + '</a>';
+                create_time = new Date(item['create']);
+                time_now = new Date();
+                ttl = (7 * 86400) - Math.floor((time_now - create_time) / 1000)
+                ttl_day = Math.floor(ttl / 86400);
+                ttl_hour = Math.floor(ttl / 3600) % 24;
+                ttl_min = Math.floor(ttl / 60) % 60;
+                ttl_sec = ttl % 60;
+                ttl = ttl_day + 'd ' + ttl_hour + 'h ' + ttl_min + 'm ' + ttl_sec + 's';
+                delete_op = '<a href="#" onclick="javascript:remove_box(\'' + item['id'] + '\');">remove</a>';
+                $('#box-list tbody').append('<tr><td>' + box_id + '</td><td>' + create_time.toLocaleString() + '</td><td>' + ttl + '</td><td>' + delete_op + '</td></tr>');
+            }
+        }
+    });
+}
+
+function register() {
+    $.getJSON('register', function(data) {
+        console.log(data)
+        if (data['status'] == '200') {
+            $('#register-resp').text("succeed!");
+            window.location.reload();
+        } else {
+            $('#register-resp').text(data['message']);
+        }
+    });
+}
+
+function create_box() {
+    $('#apply-status').text("processing...");
+    $.getJSON('create-box', function(data) {
+        console.log(data)
+        if (data['status'] == '200') {
+            $('#apply-status').text("succeed!");
+            list_box();
+        } else {
+            $('#apply-status').text("error: " + data['message']);
+        }
+    });
+}
+
+function remove_box(box_id) {
+    $.getJSON('remove-box?box_id=' + box_id, function(data) {
+        console.log(data)
+        if (data['status'] == '200') {
+            $('#op-resp').text("succeed removing!");
+            list_box();
+        } else {
+            $('#op-resp').text("error removing: " + data['message']);
+        }
+    });
+}
+
+$(document).ready(function(){
+    list_box();
+    $('#create-box').click(function(){
+        create_box();
+    });
+});
+</script>

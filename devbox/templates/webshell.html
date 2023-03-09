@@ -12,21 +12,19 @@
       href="https://unpkg.com/xterm@4.11.0/css/xterm.css"
     />
   </head>
-  <body>
-      <a href="https://github.com/cs01/pyxtermjs" target="_blank" style="font-size: 1.4em; text-decoration: none; color:black">pyxterm.js</a
+  <body style="white-space: nowrap">
+      <a href="https://github.com/DictXiong/DevBox" target="_blank" style="font-size: 1.2em; text-decoration: none; color:black">Dict's DevBox</a
       >&nbsp;&nbsp;&nbsp;
     </a>
     <span style="font-size: small"
       >status:
       <span style="font-size: small" id="status">connecting...</span></span
-    >
+    >&nbsp;&nbsp;
+    <span style="font-size: small">box id: <span style="font-size: small" id="box_id"></span></span>&nbsp;&nbsp;
+    <span style="font-size: small">powered by <a href="https://github.com/cs01/pyxtermjs" style="text-decoration: none; color:black">pyxterm.js</a></span>
 
-    <div style="width: 100%; height: calc(100% - 50px)" id="terminal"></div>
+    <div style="width: 100%; height: calc(100% - 23px)" id="terminal"></div>
 
-    <p style="text-align: right; font-size: small">
-      built by <a href="https://chadsmith.dev">Chad Smith</a>
-      <a href="https://github.com/cs01">GitHub</a>
-    </p>
     <!-- xterm -->
     <script src="https://unpkg.com/xterm@4.11.0/lib/xterm.js"></script>
     <script src="https://unpkg.com/xterm-addon-fit@0.5.0/lib/xterm-addon-fit.js"></script>
@@ -53,8 +51,7 @@ ch.js"></script>
       term.resize(15, 50);
       console.log(`size: ${term.cols} columns, ${term.rows} rows`);
       fit.fit();
-      term.writeln("Welcome to pyxterm.js!");
-      term.writeln("https://github.com/cs01/pyxterm.js");
+      term.writeln("Welcome to DevBox!");
       term.writeln('')
       term.writeln("You can copy with ctrl+shift+x");
       term.writeln("You can paste with ctrl+shift+v");
@@ -66,6 +63,7 @@ ch.js"></script>
       const params = new Proxy(new URLSearchParams(window.location.search), {
         get: (searchParams, prop) => searchParams.get(prop),
       });
+      document.getElementById("box_id").innerHTML = params.box_id;
       const socket = io.connect("/webshell?box_id=" + params.box_id);
       const status = document.getElementById("status");
 
