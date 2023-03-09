@@ -4,3 +4,4 @@ simple-websocket
 docker
 dockerpty
 python-dateutil
+uwsgi-plugin-python3
