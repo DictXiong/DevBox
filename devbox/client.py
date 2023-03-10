@@ -48,6 +48,18 @@ class ClientManager:
         self.box_manager.remove_box(box_id)
         self.db_manager.remove_box(box_id)
         return True
+    
+    def purge_client(self, client_id):
+        assert client_id
+        box_list = self.db_manager.get_box_list(client_id)
+        for i in box_list:
+            logging.warn(f"Box {i} removed because client {client_id} is purged")
+            if not self.box_manager.remove_box(i):
+                return False
+            self.db_manager.remove_box(i)
+        self.db_manager.remove_client(client_id)
+        return True
+        
 
 # todo: run this outside
 def autoclean_loop(box_manager, db_manager):

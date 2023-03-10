@@ -12,7 +12,7 @@ from flask_socketio import SocketIO
 from .client import ClientManager
 
 # const
-APP_SITE="http://box1.ibd.ink"
+APP_SITE="http://vm1.box0.ibd.ink"
 
 # init global variables
 this_dir = os.path.dirname(os.path.realpath(__file__))
@@ -73,6 +73,11 @@ def hello_world():
 def webshell():
     return render_template("webshell.html")
 
+@app.route('/account')
+def account():
+    return render_template("account.html")
+
+
 @app.route('/register')
 def register():
     client_id = request.cookies.get("client_id")
@@ -117,6 +122,30 @@ def remove_box():
             return api_return(500)
     else:
         return api_return(403, "this box does not belong to you")
+
+@app.route('/migrate-client')
+def migrate_client():
+    client_id = request.cookies.get("client_id")
+    to_client_id = request.args.get("to_client_id")
+    if not to_client_id or not client.check_client(to_client_id):
+        return api_return(403)
+    if client_id and client.check_client(client_id):
+        if not client.purge_client(client_id):
+            return api_return(500)
+    resp = make_response(api_return(200))
+    resp.set_cookie("client_id", to_client_id, max_age = 34560000)
+    return resp
+
+@app.route('/remove-client')
+def remove_client():
+    client_id = request.cookies.get("client_id")
+    if not client_id or not client.check_client(client_id):
+        return api_return(403)
+    if not client.purge_client(client_id):
+        return api_return(500)
+    resp = make_response(api_return(200))
+    resp.set_cookie("client_id", "", max_age = 0)
+    return resp
 
 
 @socketio.on("pty-input", namespace="/webshell")

@@ -1,0 +1,83 @@
+<script src="https://cdn.staticfile.org/jquery/3.3.1/jquery.min.js"></script>
+<title>Dict's DevBox</title>
+<style>
+    tbody {
+      font-family: "Roboto Mono", "Ubuntu Mono", "Consolas", Courier, monospace;
+    }
+    a {
+        text-decoration: none;
+        color: blue;
+        padding-bottom: 0;
+        border-bottom: 1px black solid;
+        word-break: break-all;
+        word-wrap: break-word;
+    }
+</style>
+
+<h1>Dict's DevBox</h1>
+<h2>Account Info</h2>
+<p>Your client id: <input id="my-client-id" readonly="readonly"> <button id="delete-account">Delete account</button> <i id="del-resp"></i></p>
+<br/>
+<div style="border:1px solid red;padding:12px;display: inline-block">
+    <p>You can migrate your DevBox account to another one. <br/>This operation will <b>destroy all you devboxes</b> at once.</p>
+    <p>Target client id: <input id="targer-client-id">&nbsp;<button id="do-migrate">Apply</button></p>
+    <i id="migrate-resp"></i>
+</div>
+<br/><br/>
+<p><a href="./">Home</a></p>
+
+<script>
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+}
+
+function isUUIDv4(value) {
+    value = value.toUpperCase();
+    return /^[0-9A-F]{8}-[0-9A-F]{4}-[4][0-9A-F]{3}-[89AB][0-9A-F]{3}-[0-9A-F]{12}$/i.test(value);
+}
+
+function migrate_account() {
+    var target_client_id = $('#targer-client-id').val();
+    if (!isUUIDv4(target_client_id)) {
+        $('#migrate-resp').text('Invalid client id');
+        return;
+    }
+    $.getJSON('migrate-client', {"to_client_id": target_client_id}, function(data) {
+        if (data['status'] == 200) {
+            $('#migrate-resp').text('Migrate success');
+            window.location.reload();
+        } else {
+            $('#migrate-resp').text('Migrate failed: ' + data['message']);
+        }
+    });
+}
+
+function delete_account() {
+    $.getJSON('remove-client', function(data) {
+        if (data['status'] == 200) {
+            $('#del-resp').text('Delete success');
+            window.location.reload();
+        } else {
+            $('#del-resp').text('Delete failed: ' + data['message']);
+        }
+    });
+}
+
+$(document).ready(function() {
+    client_id = getCookie('client_id');
+    if (client_id) {
+        $('#my-client-id').val(client_id);
+    } else {
+        $('#my-client-id').val('Not registered');
+    }
+    $('#do-migrate').click(function() {
+        migrate_account();
+    });
+    $('#delete-account').click(function() {
+        delete_account();
+    });
+});
+
+</script>
