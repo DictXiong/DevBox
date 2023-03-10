@@ -66,6 +66,7 @@ class BoxManager:
         try:
             container = self.docker_client.containers.get(box_id)
             if container.name.startswith(CONTAINER_PREFIX):
-                return {"id": container.id, "name": container.name, "create": container.attrs["Created"]}
+                container_ttl = CONTAINER_MAX_TTL - (datetime.datetime.now(datetime.timezone.utc) - dateutil.parser.parse(container.attrs["Created"])).total_seconds()
+                return {"id": container.id, "name": container.name, "create": container.attrs["Created"], "ttl": container_ttl}
         except docker.errors.NotFound:
             logging.error(f"Box {box_id} not found")

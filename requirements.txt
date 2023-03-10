@@ -4,3 +4,6 @@ simple-websocket
 docker
 dockerpty
 python-dateutil
+gevent
+gevent-websocket
+eventlet

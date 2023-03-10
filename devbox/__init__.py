@@ -11,18 +11,33 @@ from flask import Flask, render_template, session, request, make_response, jsoni
 from flask_socketio import SocketIO
 from .client import ClientManager
 
+# const
+APP_SITE="http://box1.ibd.ink"
+
 # init global variables
 this_dir = os.path.dirname(os.path.realpath(__file__))
 app = Flask(__name__, template_folder=os.path.join(this_dir, "templates"))
 logger = app.logger
-# logger.setLevel(logging.)
-logging.basicConfig(level=logging.WARNING, format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s')
-socketio = SocketIO(app)
+if app.debug:
+    logger.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG if app.debug else logging.WARNING, format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s')
+socketio = SocketIO(app, cors_allowed_origins=APP_SITE)
 sessions = {}
 client = ClientManager()
 # thing below may be rubbish
 
 # utils
+def api_return(status: int, message = None) -> str:
+    msg_temp = {
+        200: "OK",
+        400: "Wrong Arguments",
+        403: "Authentication Failed or Client Not Registered",
+        500: "Internal Server Error"
+    }
+    if not message:
+        message = msg_temp[status]
+    return jsonify({"status": status, "message": message}), 200
+
 def set_winsize(fd, row, col, xpixel=0, ypixel=0):
     logging.debug("set_winsize: fd=%s, row=%s, col=%s, xpixel=%s, ypixel=%s" % (fd, row, col, xpixel, ypixel))
     
@@ -34,20 +49,22 @@ def read_and_forward_pty_output(sid):
     logging.debug("read_and_forward_pty_output: sid=%s" % sid)
     while True:
         socketio.sleep(0.05)
-        if sessions[sid]['fd']:
-            logging.debug("reading from pty")
-            (data_ready, _, _) = select.select([sessions[sid]["fd"]], [], [], None)
-            if data_ready:
-                try:
-                    output = os.read(sessions[sid]["fd"], max_read_bytes).decode(
-                        errors="ignore"
-                    )
-                except (OSError,KeyError):
-                    socketio.emit("pty-output", {"output": "Connection closed"}, namespace="/webshell", to=sid)
-                    return
-                socketio.emit("pty-output", {"output": output}, namespace="/webshell", to=sid)
+        if sid not in sessions:
+            return
+        if not sessions[sid]['fd']:
+            continue
+        logging.debug("reading from pty")
+        (data_ready, _, _) = select.select([sessions[sid]["fd"]], [], [], 0)
+        if not data_ready:
+            continue
+        try:
+            output = os.read(sessions[sid]["fd"], max_read_bytes).decode(errors="ignore")
+        except (OSError,KeyError,BrokenPipeError):
+            break
+        socketio.emit("pty-output", {"output": output}, namespace="/webshell", to=sid)
+    socketio.emit("pty-output", {"output": "Connection closed\n"}, namespace="/webshell", to=sid)
 
-
+# webpage
 @app.route('/')
 def hello_world():
     return render_template("index.html")
@@ -60,9 +77,9 @@ def webshell():
 def register():
     client_id = request.cookies.get("client_id")
     if client_id and client.check_client(client_id):
-        return jsonify({"status": 400, "message": "client already registered"})
+        return api_return(400, "client already registered")
     client_id = client.register(request.remote_addr)
-    resp = make_response(jsonify({"status": 200, "message": "client registered"}))
+    resp = make_response(api_return(200))
     resp.set_cookie("client_id", client_id, max_age = 34560000)
     return resp
 
@@ -70,34 +87,36 @@ def register():
 def list_box():
     client_id = request.cookies.get("client_id")
     if not client_id or not client.check_client(client_id):
-        return jsonify({"status": 403})
-    return jsonify(client.get_box_fancy_list(client_id))
+        return api_return(403)
+    resp = make_response(jsonify(client.get_box_fancy_list(client_id)))
+    resp.set_cookie("client_id", client_id, max_age = 34560000)
+    return resp
 
 @app.route('/create-box')
 def create_box():
     client_id = request.cookies.get("client_id")
     if not client_id or not client.check_client(client_id):
-        return jsonify({"status": 403, "message": "client not registered"})
+        return api_return(403)
     if client.create_box(client_id):
-        return jsonify({"status": 200, "message": "box created"})
+        return api_return(200)
     else:
-        return jsonify({"status": 400, "message": "box creation failed. check if you exceeded the limit"})
+        return api_return(400, "box creation failed. check if you exceeded the limit")
 
 @app.route('/remove-box')
 def remove_box():
     client_id = request.cookies.get("client_id")
     box_id = request.args.get("box_id")
     if not client_id or not client.check_client(client_id):
-        return jsonify({"status": 403, "message": "client not registered"})
+        return api_return(403)
     if not box_id:
-        return jsonify({"status": 400, "message": "box id not provided"})
+        return api_return(400)
     if client.auth_box(client_id, box_id):
         if client.remove_box(client_id, box_id):
-            return jsonify({"status": 200, "message": "box removed"})
+            return api_return(200)
         else:
-            return jsonify({"status": 500, "message": "box removal failed"})
+            return api_return(500)
     else:
-        return jsonify({"status": 403, "message": "this box does not belong to you"})
+        return api_return(403, "this box does not belong to you")
 
 
 @socketio.on("pty-input", namespace="/webshell")
@@ -125,7 +144,7 @@ def connect():
     sid = request.sid
     container = request.args.get("box_id")
     if not container:
-        socketio.emit("pty-output", {"output": "no box id provided"}, namespace="/webshell", to=sid)
+        socketio.emit("pty-output", {"output": "no box id provided\n"}, namespace="/webshell", to=sid)
         socketio.close_room(sid)
         return
     client_id = request.cookies.get("client_id")
@@ -141,6 +160,7 @@ def connect():
         if child_pid == 0:
             # this is the child process fork.
             logging.disable(logging.CRITICAL)
+            # logger.disable(logging.CRITICAL)
             subprocess.run(["docker", "exec", "-it", container, "bash"])
         else:
             # this is the parent process fork.
@@ -149,7 +169,7 @@ def connect():
             socketio.start_background_task(target=read_and_forward_pty_output, sid=sid)
     else:
         logger.error("client already connected")
-        return "client already connected"
+
         
 @socketio.on("disconnect", namespace="/webshell")
 def disconnect():
