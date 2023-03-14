@@ -6,7 +6,7 @@ on:
       - "image/**"
   workflow_dispatch: ~
 jobs:
-  ns1:
+  build:
     runs-on: ubuntu-latest
     steps:
       -
