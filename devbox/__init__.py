@@ -190,7 +190,7 @@ def connect():
             # this is the child process fork.
             logging.disable(logging.CRITICAL)
             # logger.disable(logging.CRITICAL)
-            subprocess.run(["docker", "exec", "-it", container, "bash"])
+            subprocess.run(["docker", "exec", "-it", container, "zsh"])
         else:
             # this is the parent process fork.
             sessions[sid]["fd"] = fd

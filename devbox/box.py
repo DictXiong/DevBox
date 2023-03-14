@@ -6,7 +6,7 @@ import datetime
 
 CONTAINER_PREFIX = "devbox_"
 CONTAINER_MAX_TTL = 60 * 60 * 24 * 7  # 7 days
-IMAGE_NAME = "ubuntu:latest"
+IMAGE_NAME = "dictxiong/devbox:latest"
 
 class BoxManager:
     def __init__(self) -> None:
