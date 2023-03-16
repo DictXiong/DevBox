@@ -72,7 +72,8 @@ function copy_id() {
   var copyText = document.getElementById("my-client-id");
   copyText.select();
   copyText.setSelectionRange(0, 99999); // For mobile devices
-  navigator.clipboard.writeText(copyText.value);
+  //navigator.clipboard.writeText(copyText.value);
+  document.execCommand('copy');
   $('#del-resp').text('ID copied');
 }
 
