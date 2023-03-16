@@ -7,6 +7,8 @@ import datetime
 CONTAINER_PREFIX = "devbox_"
 CONTAINER_MAX_TTL = 60 * 60 * 24 * 7  # 7 days
 IMAGE_NAME = "dictxiong/devbox:latest"
+CONTAINER_NANO_CPUS = 1e9
+CONTAINER_MEM_LIMIT = "1g"
 
 class BoxManager:
     def __init__(self) -> None:
@@ -42,7 +44,7 @@ class BoxManager:
         return False
     
     def create_box(self, client_id):
-        container = self.docker_client.containers.run(IMAGE_NAME, detach=True, name=CONTAINER_PREFIX + client_id + "_" + str(int(time.time())), command="bash", tty=True)
+        container = self.docker_client.containers.run(IMAGE_NAME, detach=True, name=CONTAINER_PREFIX + client_id + "_" + str(int(time.time())), command="bash", tty=True, mem_limit = CONTAINER_MEM_LIMIT, nano_cpus = CONTAINER_NANO_CPUS)
         logging.warn(f"Box {container.id} created")
         return container.id
     
