@@ -1,6 +1,9 @@
 <script src="https://cdn.staticfile.org/jquery/3.3.1/jquery.min.js"></script>
 <title>Dict's DevBox</title>
 <style>
+    input {
+        font-family: "Roboto Mono", "Ubuntu Mono", "Consolas", Courier, monospace;
+    }
     tbody {
       font-family: "Roboto Mono", "Ubuntu Mono", "Consolas", Courier, monospace;
     }
@@ -16,11 +19,11 @@
 
 <h1>Dict's DevBox</h1>
 <h2>Account Info</h2>
-<p>Your client id: <input id="my-client-id" readonly="readonly"> <button id="delete-account">Delete account</button> <i id="del-resp"></i></p>
+<p>Your client id: <input id="my-client-id" readonly="readonly" size="36"> <button onclick="copy_id()">Copy</button> <button id="delete-account">Delete account</button> <i id="del-resp"></i></p>
 <br/>
 <div style="border:1px solid red;padding:12px;display: inline-block">
     <p>You can migrate your DevBox account to another one. <br/>This operation will <b>destroy all you devboxes</b> at once.</p>
-    <p>Target client id: <input id="targer-client-id">&nbsp;<button id="do-migrate">Apply</button></p>
+    <p>Target client id: <input id="targer-client-id" size="36">&nbsp;<button id="do-migrate">Apply</button></p>
     <i id="migrate-resp"></i>
 </div>
 <br/><br/>
@@ -64,6 +67,15 @@ function delete_account() {
         }
     });
 }
+
+function copy_id() {
+  var copyText = document.getElementById("my-client-id");
+  copyText.select();
+  copyText.setSelectionRange(0, 99999); // For mobile devices
+  navigator.clipboard.writeText(copyText.value);
+  $('#del-resp').text('ID copied');
+}
+
 
 $(document).ready(function() {
     client_id = getCookie('client_id');
