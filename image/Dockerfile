@@ -7,3 +7,5 @@ RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
   && (curl dotfiles.cn | bash -s - -alu root -x DFS_UPDATE_CHANNEL=dev -x DFS_THEME=ys -x DFS_ORPHAN=1) \
   && rm -rf /var/lib/apt/list/*
 
+ENTRYPOINT ["/usr/bin/supervisord", "-n"]
+
