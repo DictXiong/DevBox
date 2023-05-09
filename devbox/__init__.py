@@ -12,7 +12,7 @@ from flask_socketio import SocketIO
 from .client import ClientManager
 
 # const
-APP_SITE="http://vm1.box0.ibd.ink"
+APP_SITE="https://box1.ibd.ink"
 
 # init global variables
 this_dir = os.path.dirname(os.path.realpath(__file__))
