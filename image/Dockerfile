@@ -6,5 +6,7 @@ RUN ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
   && (curl dotfiles.cn | bash -s - -alu root -x DFS_UPDATE_CHANNEL=dev -x ZSH_THEME=ys -x DFS_ORPHAN=1) \
   && rm -rf /var/lib/apt/list/*
 
+COPY fzf.vim key-bindings.zsh /usr/share/doc/fzf/examples/
+
 ENTRYPOINT ["/usr/bin/supervisord", "-n"]
 
